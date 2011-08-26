@@ -1,16 +1,16 @@
 
-#!/bin/sh
-#$ -S /bin/sh
+#!/bin/bash
+#$ -S /bin/bash
 
 date ##to measure the duration
 
 
 
 
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/ncbi-blast-2.2.24+/bin/blastn -db /ugi/data/vincent/sequence_database/human_genomic/human_genomic -query  results/novoalign/NM_example_overlapping.fasta  -outfmt "6 qacc sacc evalue pident qstart qend sstart send"  -num_alignments 1   -evalue 0.1  -culling_limit 1 -num_threads 12  > results/blastn/NM_example_overlapping.ncbiBLASTn
+/ugi/data/sofia/IlluMeta/exec/ncbi-blast-2.2.24+/bin/blastn -db /ugi/data/vincent/sequence_database/human_genomic/human_genomic -query  results/novoalign/NM_example_overlapping.fasta  -outfmt "6 qacc sacc evalue pident qstart qend sstart send"  -num_alignments 1   -evalue 0.1  -culling_limit 1 -num_threads 12  > results/blastn/NM_example_overlapping.ncbiBLASTn
 
 
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/ncbi-blast-2.2.24+/bin/blastn -db /ugi/data/vincent/sequence_database/human_genomic/human_genomic -query  results/novoalign/NM_paired_example_nonOverlapping.fasta  -outfmt "6 qacc sacc evalue pident qstart qend sstart send"  -num_alignments 1   -evalue 0.1  -culling_limit 1 -num_threads 12  > results/blastn/NM_paired_example_nonOverlapping.ncbiBLASTn
+/ugi/data/sofia/IlluMeta/exec/ncbi-blast-2.2.24+/bin/blastn -db /ugi/data/vincent/sequence_database/human_genomic/human_genomic -query  results/novoalign/NM_paired_example_nonOverlapping.fasta  -outfmt "6 qacc sacc evalue pident qstart qend sstart send"  -num_alignments 1   -evalue 0.1  -culling_limit 1 -num_threads 12  > results/blastn/NM_paired_example_nonOverlapping.ncbiBLASTn
 
 
 

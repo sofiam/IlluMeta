@@ -1,6 +1,6 @@
 
 ########### Here is the one line that needs to be modified
-Illumeta=/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta
+Illumeta=/ugi/data/sofia/IlluMeta
 
 
 ########## everything else below should be automated
@@ -22,9 +22,9 @@ dbnr=/ugi/home/shared/sofia/reference_seq/nr/nr.faa
 
 ############ default values
 local=interactive
-lanenumber1=1
-contigLengthCutoff=140
-script=cluster/submission/default.sh
+contigLengthCutoff=150
+script=${output}/cluster/submission/default.sh
+
 
 step1_q1=FALSE
 step2_q1=FALSE
@@ -100,9 +100,10 @@ until [ -z "$1" ]; do
 	--blastnDone )
 	    shift
 	    blastnDone=$1;;	
-	--skipping )
+	--paired )
 	    shift
-	    skipping=$1;;
+	    paired=$1;;	
+
 	-* )
 	    echo "Unrecognized option: $1"
 	    exit 1;;
@@ -116,6 +117,11 @@ done
 echo -e "Output folder: $output\n"
 
 
+
+clusterDir=${output}/cluster
+cluster_out=${clusterDir}/out
+cluster_error=${clusterDir}/error
+cluster_submission=${clusterDir}/submission
 
 output_velvet=${output}/velvet
 output_velvet_input=${output_velvet}/input
@@ -131,7 +137,7 @@ output_novoalign=${output}/novoalign
 output_final=${output}/final
 
 
-myFolders="cluster cluster/out cluster/error cluster/submission $output $output_velvet $output_velvet_input $output_merged $output_collapsed $output_blastn $output_blastx $output_novoalign $output_final $output_subsetted $contigs_subsetted"
+myFolders="$output $clusterDir $cluster_out $cluster_error $cluster_submission $output_velvet $output_velvet_input $output_merged $output_collapsed $output_blastn $output_blastx $output_novoalign $output_final $output_subsetted $contigs_subsetted"
 
 for folder in $myFolders; do
     if [ ! -e $folder ]; then 
@@ -162,36 +168,37 @@ date ##to measure the duration
 
 if [[ "$step1_q1" == "TRUE" ]]; then
 
+    if [[ "$paired" == "TRUE" ]]; then    ########################## step 1 for PAIRED END data
     
-    nfiles=${inputFiles[0]}
+	nfiles=${inputFiles[0]}
     
-    if [[ "$nfiles" != "2" ]]; then
-	echo "You specified $nfiles input files".
-	echo "Error: currently the input data MUST be paired end."
-	exit;
-    fi
+	if [[ "$nfiles" != "2" ]]; then
+	    echo "You specified $nfiles input files".
+	    echo "Error: currently the input data MUST be paired end."
+	    exit;
+	fi
     
-
-    seq1=${inputFiles[ 1 ]}
-    seq2=${inputFiles[ 2 ]}
+	
+	seq1=${inputFiles[ 1 ]}
+	seq2=${inputFiles[ 2 ]}
 
 
 ###############  check that raw data files & reference exist
-    for file in $seq1 $seq2 $reference; do
-	ls -lh $file
-	if [ ! -e "$file" ]; then 
-	    echo "Error, file $file does not exist"
-	    exit
-	fi
-    done
+	for file in $seq1 $seq2 $reference; do
+	    ls -lh $file
+	    if [ ! -e "$file" ]; then 
+		echo "Error, file $file does not exist"
+		exit
+	    fi
+	done
 
 
 #################################################################  Collapsing
-    echo "1) Collapse paired reads"
-
-    summaryfile=${sample}_summary.txt
+	echo "1) Collapse paired reads"
+	
+	summaryfile=${sample}_summary.txt
     
-    echo "
+	echo "
 
 ${fastqCollapse}  -i $seq1 $seq2 -o ${output_collapsed}/${sample} -summary ${output_collapsed}/${summaryfile}
 
@@ -199,20 +206,20 @@ ${fastqCollapse}  -i $seq1 $seq2 -o ${output_collapsed}/${sample} -summary ${out
 
 
 ################################################################ Merging
-    echo "2) Merge Reads"
+	echo "2) Merge Reads"
     
-    echo "
+	echo "
 
-${concatReads} --adaptersFile ../support/adapters.fa ${output_collapsed}/${sample}_1.fq  ${output_collapsed}/${sample}_2.fq  ${output_merged}/${sample}
+${concatReads} --adaptersFile ${Illumeta}/support/adapters.fa ${output_collapsed}/${sample}_1.fq  ${output_collapsed}/${sample}_2.fq  ${output_merged}/${sample}
 
 " >> $script
     
 
 ################################################################ Check whether merging necessary 
     
-    echo -e "3) Is merging necessary? Print merged percentage."
+	echo -e "3) Is merging necessary? Print merged percentage."
 
-    echo "
+	echo "
 
 awk -F":" '{if ((\$1~/Sequences Processed/) || (\$1~/Sequences Overlapping/)) print \$2}' ${output_merged}/$sample.summary  | awk '{ a[\$0] } END {for (i in a){for (j in a){if (i < j)  print (i/j)*100} }}' > ${output}/percentage_merged.txt
 
@@ -223,11 +230,11 @@ awk -F":" '{if ((\$1~/Sequences Processed/) || (\$1~/Sequences Overlapping/)) pr
 
 ################################################################# Novoalign
 
-    echo -e "4a) Merged data more than 10% -> Align merged (single end) and remaining (paired end) against host."
-    echo -e "4b) Merged data less than 10% -> Align original collapsed files (only paired end data) against host."
+	echo -e "4a) Merged data more than 10% -> Align merged (single end) and remaining (paired end) against host."
+	echo -e "4b) Merged data less than 10% -> Align original collapsed files (only paired end data) against host."
 
 
-    echo "
+	echo "
 
 percentage=\`awk -F\".\" '{print \$1}' ${output}/percentage_merged.txt\`
 
@@ -245,10 +252,10 @@ fi
 " >> $script
 
 
-echo -e "5) Select pairs of reads that are both NM ->make txt and fasta files. When merged, select all NM ones."
+	echo -e "5) Select pairs of reads that are both NM ->make txt and fasta files. When merged, select all NM ones."
 
 
-echo " 
+	echo " 
 novofiles="${output_novoalign}/*.novo"
 echo "Novoalign files are '$novofiles'"
 
@@ -282,12 +289,83 @@ done
 
 
 
-if [[ ! "$local" == "interactive" ]]; then
-    echo $local
-    qsub -cwd  -o cluster/out -e cluster/error -q $local $script
+	if [[ ! "$local" == "interactive" ]]; then
+	    echo $local
+	    qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
 
-fi
+	fi
 
+  
+
+    else   ######################################################### step 1 for SINGLE END data
+
+
+    
+	nfiles=${inputFiles[0]}
+    
+	if [[ "$nfiles" != "1" ]]; then
+	    echo "You specified $nfiles input files".
+	    echo "Error: currently the input data MUST be single end."
+	    exit;
+	fi
+    
+
+	seq1=${inputFiles[ 1 ]}
+   
+
+
+###############  check that raw data files & reference exist
+	for file in $seq1 $reference; do
+	    ls -lh $file
+	    if [ ! -e "$file" ]; then 
+		echo "Error, file $file does not exist"
+		exit
+	    fi
+	done
+
+
+################################################################# Novoalign
+
+	echo "
+
+############## Hardclipping and quality calibration
+${novoalign} -t180  -H -a  -k  -f $seq1 -d $reference > ${output_novoalign}/${sample}.novo
+
+" >> $script
+
+
+	echo -e "5) Select all NM reads."
+
+	echo " 
+novofiles="${output_novoalign}/*.novo"
+echo "Novoalign file is '$novofiles'"
+
+
+for i in \$novofiles
+do
+    echo "Print '$i'"
+    filename=\`basename \$i .novo\`
+    echo "Filename is '$filename'"
+
+
+	awk -F\"\\t\" 'BEGIN {OFS=\"\\t\"} {if (\$5~/NM/) print \$1,\$3}'  \$i |  uniq > ${output_novoalign}/NM_\$filename.txt
+	wc -l ${output_novoalign}/NM_\$filename.txt > ${output_novoalign}/NM.number
+	awk '{print \">\"\$1\"\n\"\$2}' ${output_novoalign}/NM_\$filename.txt > ${output_novoalign}/NM_\$filename.fasta
+
+
+done
+" >> $script
+
+
+
+	if [[ ! "$local" == "interactive" ]]; then
+	    echo $local
+	    qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
+
+	fi
+
+
+    fi
 fi
 
 ############## end of the STEP1 
@@ -301,53 +379,53 @@ fi
 
 if [[ "$step2_q1" == "TRUE" ]]; then
 
+    if [[ "$paired" == "TRUE" ]]; then   ########################### step 2 for PAIRED END data
 
-    echo -e "6) Submit blastn job against human reference"
+	echo -e "6) Submit blastn job against human reference"
 
-    if [[ "$merged" == "TRUE" ]]; then
+	if [[ "$merged" == "TRUE" ]]; then
 
-	blastn_input_files="${output_novoalign}/NM_${sample}_overlapping.fasta  ${output_novoalign}/NM_paired_${sample}_nonOverlapping.fasta"
-        echo "Input files for blastn are in  '$blastn_input_files'"
+	    blastn_input_files="${output_novoalign}/NM_${sample}_overlapping.fasta  ${output_novoalign}/NM_paired_${sample}_nonOverlapping.fasta"
+            echo "Input files for blastn are in  '$blastn_input_files'"
        
 
-    else
+	else
         
-        blastn_input_files="${output_novoalign}/NM_paired_${sample}.fasta"
-        echo "Input files for blastn are in  '$blastn_input_files'"
-    fi
+            blastn_input_files="${output_novoalign}/NM_paired_${sample}.fasta"
+            echo "Input files for blastn are in  '$blastn_input_files'"
+	fi
    
 	
-    for i in $blastn_input_files; do
+	for i in $blastn_input_files; do
 
 
-    ls -lh $i
-    if [ ! -e "$i" ]; then 
-	echo "Error, input file for blastn $i does not exist"    ##########Check input for blastn (created in previous step) exists
-	exit
+	    ls -lh $i
+	    if [ ! -e "$i" ]; then 
+		echo "Error, input file for blastn $i does not exist"    ##########Check input for blastn (created in previous step) exists
+		exit
     
 
-    else
+	    else
 
-	filename=`basename $i .fasta`
-	outputblastn=${output_blastn}/$filename.ncbiBLASTn
-	echo $i
-	echo $filename	
-	echo $output
+		filename=`basename $i .fasta`
+		outputblastn=${output_blastn}/$filename.ncbiBLASTn
+		echo $i
+		echo $filename	
+		echo $output
 
-	echo "
+		echo "
 $blastn -db $db -query  $i  -outfmt \"6 qacc sacc evalue pident qstart qend sstart send\"  -num_alignments 1   -evalue 0.1  -culling_limit 1 -num_threads 12  > $outputblastn
 " >> $script
 	
- fi
-    done
+	    fi
+	done
 
 
 
 
+	echo -e "7) filter out blastn hits and keep filtered dataset"
 
-    echo -e "7) filter out blastn hits and keep filtered dataset"
-
-    echo "
+	echo "
 
 blastnfiles="${output_blastn}/*.ncbiBLASTn"
 
@@ -409,11 +487,81 @@ for i in \$blastnfiles
 " >> $script                         
 
 
+	if [[ ! "$local" == "interactive" ]]; then
+	    qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
+
+	fi
+
+    else  ############################################################## step 2 for  SINGLE END data
+
+ echo -e "6) Submit blastn job against human reference"
+
+
+	blastn_input_files="${output_novoalign}/NM_${sample}.fasta"
+        echo "Input files for blastn are in  '$blastn_input_files'"
+       
+	
+    for i in $blastn_input_files; do
+
+
+    ls -lh $i
+    if [ ! -e "$i" ]; then 
+	echo "Error, input file for blastn $i does not exist"    ##########Check input for blastn (created in previous step) exists
+	exit
+    
+
+    else
+
+	filename=`basename $i .fasta`
+	outputblastn=${output_blastn}/$filename.ncbiBLASTn
+	echo $i
+	echo $filename	
+	echo $output
+
+	echo "
+$blastn -db $db -query  $i  -outfmt \"6 qacc sacc evalue pident qstart qend sstart send\"  -num_alignments 1   -evalue 0.1  -culling_limit 1 -num_threads 12  > $outputblastn
+" >> $script
+	
+ fi
+    done
+
+
+
+
+
+    echo -e "7) filter out blastn hits and keep filtered dataset"
+
+    echo "
+
+blastnfiles="${output_blastn}/*.ncbiBLASTn"
+
+for i in \$blastnfiles
+   do
+   filename=\`basename \$i .ncbiBLASTn\`
+       echo \$i
+        echo \$filename
+####### Make filtered files for single end reads
+
+
+            initialNM=${output_novoalign}/NM_${sample}.txt
+            filteredNM=${output_blastn}/\${filename}_filtered.txt
+            echo \$initialNM
+            echo \$filteredNM
+            awk -F\"\\t\" 'BEGIN {OFS=\"\\t\"} NR==FNR{a[\$1]=\$1;next} a[\$1]!=\$1{print \$1, \$2}' \${i} \${initialNM} > \${filteredNM}
+	    wc -l \${filteredNM} > ${output_blastn}/NM_single.number
+
+    done
+
+" >> $script                         
+
+
     if [[ ! "$local" == "interactive" ]]; then
-	qsub -cwd  -o cluster/out -e cluster/error -q $local $script
+	qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
 
     fi
 
+
+    fi
 
 fi
 
@@ -426,68 +574,70 @@ fi
 
 if [[ "$step3_q14" == "TRUE" ]]; then
 
-    echo -e "8) Submit blastx jobs against viral database"
+    if [[ "$paired" == "TRUE" ]]; then         ############################## step 3 for PAIRED END data
 
-    if [ ! -e $dbViral ]; then echo "File $dbViral does not exist."; exit; fi
+	echo -e "8) Submit blastx jobs against viral database"
+
+	if [ ! -e $dbViral ]; then echo "File $dbViral does not exist."; exit; fi
     
 
-    if [[ "$merged" == "TRUE" ]]; then    
-	if [[ "$blastnDone" == "TRUE" ]]; then    				########## use filtered datasets
+	if [[ "$merged" == "TRUE" ]]; then    
+	    if [[ "$blastnDone" == "TRUE" ]]; then    				########## use filtered datasets
 
 		blastx_input_files="${output_blastn}/NM_${sample}_overlapping_filtered.txt ${output_blastn}/NM_paired_${sample}_nonOverlapping_filtered.txt"
 		echo "Input files for blastx are in '$blastx_input_files'"
 	
-	else 									######### use datasets from novoalign
+	    else 									######### use datasets from novoalign
 	 
-	       blastx_input_files="${output_novoalign}/NM_${sample}_overlapping.txt  ${output_novoalign}/NM_paired_${sample}_nonOverlapping.txt"
+		blastx_input_files="${output_novoalign}/NM_${sample}_overlapping.txt  ${output_novoalign}/NM_paired_${sample}_nonOverlapping.txt"
 		echo "Input files for blastx are in  '$blastx_input_files'"
-  	fi
+  	    fi
 
 
-   else   
+	else   
 
-	if [[ "$blastnDone" == "TRUE" ]]; then
+	    if [[ "$blastnDone" == "TRUE" ]]; then
 		blastx_input_files="${output_blastn}/NM_paired_${sample}_filtered.txt"
-	else 
+	    else 
 		blastx_input_files="${output_novoalign}/NM_paired_${sample}.txt"
 		echo "Input files for blastx are in  '$blastx_input_files'"
-  	fi
+  	    fi
 
-   fi
+	fi
     
     
-    for i in $blastx_input_files; do
+	for i in $blastx_input_files; do
 
-	ls -lh $i
-	if [ ! -e "$i" ]; then 
-	    echo "Error, input file for blastx $i does not exist"    ##########Check that input for blastx (created in previous step) exists
-	    exit
+	    ls -lh $i
+	    if [ ! -e "$i" ]; then 
+		echo "Error, input file for blastx $i does not exist"    ##########Check that input for blastx (created in previous step) exists
+		exit
     
 
-	else
-	
-	filename=`basename $i .txt`
-	
-	if [[ $i =~ .*_paired.* ]]; then   ################## if the file consists of paired reads
-	    
-	    if [[ "$blastnDone" == "TRUE" ]]; then
-		numBlastxJobs=`awk '{print $1/10000}' ${output_blastn}/NM_paired.number | awk -F"." '{print \$1}'`
 	    else
-	    	numBlastxJobs=`awk '{print $1/10000}' ${output_novoalign}/NM_paired.number | awk -F"." '{print \$1}'`
-	    fi	    
-	    
-	    goodNum=$(( $numBlastxJobs + 1 ))
-	    echo "Non merged reads for blastx are in $i and number of jobs $goodNum"
-	    
-	    for Estart in `seq 0 $numBlastxJobs`; do				
-		((start=Estart*10000))
-		((end=start+10000))
-		echo $start $end
+	
+		filename=`basename $i .txt`
 		
-		blastxScript=cluster/submission/blastx_${filename}_$start.sh
-		echo $blastxScript
+		if [[ $i =~ .*_paired.* ]]; then   ################## if the file consists of paired reads
+	    
+		    if [[ "$blastnDone" == "TRUE" ]]; then
+			numBlastxJobs=`awk '{print $1/10000}' ${output_blastn}/NM_paired.number | awk -F"." '{print \$1}'`
+		    else
+	    		numBlastxJobs=`awk '{print $1/10000}' ${output_novoalign}/NM_paired.number | awk -F"." '{print \$1}'`
+		    fi	    
+	    
+		    goodNum=$(( $numBlastxJobs + 1 ))
+		    echo "Non merged reads for blastx are in $i and number of jobs $goodNum"
+	    
+		    for Estart in `seq 0 $numBlastxJobs`; do				
+			((start=Estart*10000))
+			((end=start+10000))
+			echo $start $end
 		
-		echo "
+			blastxScript=${cluster_submission}/blastx_${filename}_$start.sh
+			echo $blastxScript
+		
+			echo "
 #!/bin/bash
 #$ -S /bin/bash
 
@@ -497,33 +647,33 @@ export PERL5LIB=\${PERL5LIB}:${Software}/bioperl-live
 perl $perlBlastx  $i ${output} $filename  $start $end $dbViral
 
 " > $blastxScript
-		qsub -cwd  -o cluster/out -e cluster/error -q queue14 $blastxScript
-	  
-		echo "sub script: $blastxScript"
-	    done
+			qsub -cwd  -o $cluster_out -e $cluster_error -q queue14 $blastxScript
+			
+			echo "sub script: $blastxScript"
+		    done
 	    
 	    
-	else    ##############################that is for single end reads
+		else    ##############################that is for single end reads
           
-	    goodNum=$(($numBlastxJobs + 1))
-	    echo "Merged reads for blastx are in $i and number of jobs $goodNum"
+		    goodNum=$(($numBlastxJobs + 1))
+		    echo "Merged reads for blastx are in $i and number of jobs $goodNum"
 	    
-	    if [[ "$blastnDone" == "TRUE" ]]; then
-                numBlastxJobs=`awk '{print $1/10000}' ${output_blastn}/NM_single.number | awk -F"." '{print \$1}'`
+		    if [[ "$blastnDone" == "TRUE" ]]; then
+			numBlastxJobs=`awk '{print $1/10000}' ${output_blastn}/NM_single.number | awk -F"." '{print \$1}'`
 		
-	    else
-	    	numBlastxJobs=`awk '{print $1/10000}' ${output_novoalign}/NM.number | awk -F"." '{print \$1}'`
-	    fi
+		    else
+	    		numBlastxJobs=`awk '{print $1/10000}' ${output_novoalign}/NM.number | awk -F"." '{print \$1}'`
+		    fi
 	    
-	    for Estart in `seq 0 $numBlastxJobs`; do
+		    for Estart in `seq 0 $numBlastxJobs`; do
 		
-		((start=Estart*10000))
-		((end=start+10000))
-		echo $start $end
+			((start=Estart*10000))
+			((end=start+10000))
+			echo $start $end
 		
-		blastxScript=cluster/submission/blastx_${filename}_$start.sh
+			blastxScript=${cluster_submission}/blastx_${filename}_$start.sh
 		
-		echo "
+			echo "
 #!/bin/bash
 #$ -S /bin/bash
 
@@ -533,13 +683,87 @@ export PERL5LIB=\${PERL5LIB}:${Software}/bioperl-live
 perl $perlBlastx  $i ${output} $filename  $start $end $dbViral
 
  " >  $blastxScript
-		      echo "sub script: $blastxScript"
-		      qsub -cwd  -o cluster/out -e cluster/error -q queue14 $blastxScript
-		  done	    
+			echo "sub script: $blastxScript"
+			qsub -cwd  -o $cluster_out -e $cluster_error -q queue14 $blastxScript
+		    done	    
 
-	fi
-	fi	
-    done
+		fi
+	    fi	
+	done
+  
+
+  else  ########################################################## step 3 from SINGLE END  data
+
+	echo -e "8) Submit blastx jobs against viral database"
+
+	if [ ! -e $dbViral ]; then echo "File $dbViral does not exist."; exit; fi
+    
+
+	if [[ "$blastnDone" == "TRUE" ]]; then    				########## use filtered datasets
+
+	    blastx_input_files="${output_blastn}/NM_${sample}_filtered.txt"
+	    echo "Input file for blastx is in '$blastx_input_files'"
+	
+	else 									######### use datasets from novoalign
+	 
+	    blastx_input_files="${output_novoalign}/NM_${sample}.txt"
+	    echo "Input file for blastx is in  '$blastx_input_files'"
+  	fi
+
+	
+    
+	for i in $blastx_input_files; do
+
+	    ls -lh $i
+	    if [ ! -e "$i" ]; then 
+		echo "Error, input file for blastx $i does not exist"    ##########Check that input for blastx (created in previous step) exists
+		exit
+    
+
+	    else
+	
+		filename=`basename $i .txt`
+	
+	  
+	    
+    ##############################that is for single end reads
+          
+		goodNum=$(($numBlastxJobs + 1))
+		echo "Single end  reads for blastx are in $i and number of jobs $goodNum"
+	    
+		if [[ "$blastnDone" == "TRUE" ]]; then
+                    numBlastxJobs=`awk '{print $1/10000}' ${output_blastn}/NM_single.number | awk -F"." '{print \$1}'`
+		    
+		else
+	    	    numBlastxJobs=`awk '{print $1/10000}' ${output_novoalign}/NM.number | awk -F"." '{print \$1}'`
+		fi
+	    
+		for Estart in `seq 0 $numBlastxJobs`; do
+		
+		    ((start=Estart*10000))
+		    ((end=start+10000))
+		    echo $start $end
+		
+		    blastxScript=${cluster_submission}/blastx_${filename}_$start.sh
+		
+		    echo "
+#!/bin/bash
+#$ -S /bin/bash
+
+export PATH=\${PATH}:${Software}/blast-2.2.24/bin
+export PERL5LIB=\${PERL5LIB}:${Software}/bioperl-live
+
+perl $perlBlastx  $i ${output} $filename  $start $end $dbViral
+
+ " >  $blastxScript
+		    echo "sub script: $blastxScript"
+		    qsub -cwd  -o $cluster_out -e $cluster_error -q queue14 $blastxScript
+		done	    
+
+	    fi
+	done
+
+    fi
 fi
 
 ######################################## end of STEP3
@@ -550,45 +774,195 @@ fi
 ###################################################### STEP4 with queue1-Velvet
 
 if [[ "$step4_q1" == "TRUE" ]]; then
-    echo -e "9) Take viral reads and make fasta file for Velvet."
+
+    if [[ "$paired" == "TRUE" ]]; then     ################################ step4 for PAIRED END data
+
+	echo -e "9) Take viral reads and make fasta file for Velvet."
 
 
-    blastxfiles="${output_subsetted}/*.txt"
-    echo " Blastx files are $blastxfiles"
+	blastxfiles="${output_subsetted}/*.txt"
+	echo " Blastx files are $blastxfiles"
 
     ########## start by cleaning up these files if they exist
-    concatBlastOver="${output_blastx}/NM_${sample}_overlapping_vs_viral.txt"
-    concatBlastNon="${output_blastx}/NM_${sample}_nonOverlapping_vs_viral.txt"
-    for file in $concatBlastOver $concatBlastNon; do
-	if [ -e $file ]; then rm $file; fi
-    done
+	concatBlastOver="${output_blastx}/NM_${sample}_overlapping_vs_viral.txt"
+	concatBlastNon="${output_blastx}/NM_${sample}_nonOverlapping_vs_viral.txt"
+	for file in $concatBlastOver $concatBlastNon; do
+	    if [ -e $file ]; then rm $file; fi
+	done
 
-    for i in $blastxfiles;
-    do
+	for i in $blastxfiles;
+	do
 
-	ls -lh $i
-	if [ ! -e "$i" ]; then 
-	    echo "Error,  blastx output files $i do not exist"    ##########Check that blastx output files (created in previous step) exist
-	    exit
+	    ls -lh $i
+	    if [ ! -e "$i" ]; then 
+		echo "Error,  blastx output files $i do not exist"    ##########Check that blastx output files (created in previous step) exist
+		exit
     
 
-	else
-	    
-	    echo $i
-	    if [[ $i == *_overlapping* ]]; then
-		cat $i >>  $concatBlastOver
 	    else
-		cat $i >> $concatBlastNon
+	    
+		echo $i
+		if [[ $i == *_overlapping* ]]; then
+		    cat $i >>  $concatBlastOver
+		else
+		    cat $i >> $concatBlastNon
+		fi
 	    fi
-	fi
-    done
+	done
     
-    concatBlastx="${output_blastx}/*.txt"
-    for i in $concatBlastx;
-      do
-	filename=`basename \$i .txt`	
+	concatBlastx="${output_blastx}/*.txt"
+	for i in $concatBlastx;
+	do
+	    filename=`basename \$i .txt`	
 
-	if [[ $i == *_overlapping* ]]; then
+	    if [[ $i == *_overlapping* ]]; then
+####### Make fasta files for merged reads (single end)
+		
+		echo $i
+	    
+		singletmp=${output_velvet_input}/velvet_input_single.txt
+		velvetInputSingle=${output_velvet_input}/velvet_input_single.fasta
+	    
+		awk -F " "  '{print $1, $2}' $i | uniq >> $singletmp
+		awk -F " "  '{ print ">"$1"\n"$2}' $singletmp | uniq >> $velvetInputSingle
+
+		rm $singletmp
+
+	    else
+	    
+####### Make fasta files for non overlapping reads (paired end)
+		echo $i
+
+		file1=${i}
+		file1tmp=${output_velvet_input}/${filename}_tmp.txt
+	  
+		if [[ "$merged" == "TRUE" ]]; then
+	 	    file2=${output_novoalign}/NM_paired_${sample}_nonOverlapping.txt
+	   	    file2tmp=${output_velvet_input}/NM_paired_${sample}_nonOverlapping_tmp.txt
+		else
+		    file2=${output_novoalign}/NM_paired_${sample}.txt
+                    file2tmp=${output_velvet_input}/NM_paired_${sample}_tmp.txt
+		    
+		fi	  
+  		velvetInputPaired=${output_velvet_input}/velvet_input_paired.fasta
+	    
+		awk -F"\t" '{split($1, a, "/");  print a[1], $1, $3}' $file1 | uniq > $file1tmp
+		awk -F"\t" '{split($1, a, "/");  print a[1], $1, $2}' $file2 | uniq > $file2tmp
+
+		echo $file1tmp
+		echo $file2tmp
+
+		awk -F" " ' NR==FNR{a[$1]=$1;next} a[$1]==$1{print ">"$2"\n"$3}' $file1tmp $file2tmp > $velvetInputPaired
+	    
+		rm $file1tmp
+		rm $file2tmp
+
+	    fi
+
+	done
+
+	echo -e "10) Velvet. Try several parameters."
+  
+	velvetInputFiles="${output_velvet}/*.fasta"
+	echo " Velvet Input files are $velvetInputFiles"
+
+	if [[ "$merged" == "TRUE" ]]; then
+    
+	    velvetInputFiles="${velvetInputSingle} ${velvetInputPaired}"
+	    echo "Input files for velvet are in  '$velvetInputFiles'"
+
+        
+	    for id in `seq 15 2 51`;
+	    do
+
+		outdir=${output_velvet}/output_k$id/
+
+		echo $outdir
+
+		echo "
+${velveth}  $outdir  $id -fasta -shortPaired $velvetInputPaired -short $velvetInputSingle
+
+" >> $script
+
+	    done
+	
+	else
+
+	    velvetInputFiles="$velvetInputPaired"
+	    echo "Input files for velvet are in  '$velvetInputFiles'"
+
+	    
+	    for id in `seq 15 2 51`;
+	    do
+
+		outdir=${output_velvet}/output_k$id/
+
+		echo $outdir
+
+		echo "
+${velveth}  $outdir  $id -fasta -shortPaired $velvetInputPaired 
+" >> $script
+
+	    done
+
+	fi
+
+
+	for id in `seq 15 2 51` ;
+	do
+
+	    dir=${output_velvet}/output_k$id
+
+	    echo "
+${velvetg} $dir  -read_trkg yes -amos_file yes -unused_reads yes -exp_cov auto
+
+" >> $script
+
+	done
+
+
+
+	if [[ ! "$local" == "interactive" ]]; then
+	    qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
+	fi
+
+
+    else  #####################################step 4 for SINGLE END data
+
+	echo -e "9) Take viral reads and make fasta file for Velvet."
+
+
+	blastxfiles="${output_subsetted}/*.txt"
+	echo " Blastx files are $blastxfiles"
+
+    ########## start by cleaning up these files if they exist
+	concatBlastx="${output_blastx}/NM_${sample}_vs_viral.txt"
+
+	for file in $concatBlastx; do
+	    if [ -e $file ]; then rm $file; fi
+	done
+	
+	for i in $blastxfiles;
+	do
+
+	    ls -lh $i
+	    if [ ! -e "$i" ]; then 
+		echo "Error,  blastx output files $i do not exist"    ##########Check that blastx output files (created in previous step) exist
+		exit
+    
+
+	    else
+		
+		echo $i
+		cat $i >>  $concatBlastx
+	    fi
+	done
+    
+	#concatBlastx="${output_blastx}/*.txt"
+	for i in $concatBlastx;
+	do
+	    filename=`basename \$i .txt`	
+
 ####### Make fasta files for merged reads (single end)
 
 	    echo $i
@@ -601,102 +975,54 @@ if [[ "$step4_q1" == "TRUE" ]]; then
 
 	    rm $singletmp
 
-	else
 	    
-####### Make fasta files for non overlapping reads (paired end)
-	    echo $i
+	done
 
-	    file1=${i}
-	    file1tmp=${output_velvet_input}/${filename}_tmp.txt
-	  
-	  if [[ "$merged" == "TRUE" ]]; then
-	 	 file2=${output_novoalign}/NM_paired_${sample}_nonOverlapping.txt
-	   	 file2tmp=${output_velvet_input}/NM_paired_${sample}_nonOverlapping_tmp.txt
-	  else
-		 file2=${output_novoalign}/NM_paired_${sample}.txt
-                 file2tmp=${output_velvet_input}/NM_paired_${sample}_tmp.txt
-
-	  fi	  
-  		velvetInputPaired=${output_velvet_input}/velvet_input_paired.fasta
-	    
-	    awk -F"\t" '{split($1, a, "/");  print a[1], $1, $3}' $file1 | uniq > $file1tmp
-	    awk -F"\t" '{split($1, a, "/");  print a[1], $1, $2}' $file2 | uniq > $file2tmp
-
-	    echo $file1tmp
-	    echo $file2tmp
-
-	    awk -F" " ' NR==FNR{a[$1]=$1;next} a[$1]==$1{print ">"$2"\n"$3}' $file1tmp $file2tmp > $velvetInputPaired
-	    
-	    rm $file1tmp
-	    rm $file2tmp
-
-	fi
-
-    done
-
-    echo -e "10) Velvet. Try several parameters."
+	echo -e "10) Velvet. Try several parameters."
   
-    velvetInputFiles="${output_velvet}/*.fasta"
-    echo " Velvet Input files are $velvetInputFiles"
+	velvetInputFiles="${output_velvet}/*.fasta"
+	echo " Velvet Input files are $velvetInputFiles"
 
-    if [[ "$merged" == "TRUE" ]]; then
     
-	velvetInputFiles="${velvetInputSingle} ${velvetInputPaired}"
+	velvetInputFiles="${velvetInputSingle}"
 	echo "Input files for velvet are in  '$velvetInputFiles'"
 
         
 	for id in `seq 15 2 51`;
 	do
-
+	    
 	    outdir=${output_velvet}/output_k$id/
 
 	    echo $outdir
 
 	    echo "
-${velveth}  $outdir  $id -fasta -shortPaired $velvetInputPaired -short $velvetInputSingle
+${velveth}  $outdir  $id -fasta  -short $velvetInputSingle
 
 " >> $script
 
 	done
 	
-    else
 
-	velvetInputFiles="$velvetInputPaired"
-	echo "Input files for velvet are in  '$velvetInputFiles'"
 
-    
-	for id in `seq 15 2 51`;
+	for id in `seq 15 2 51` ;
 	do
 
-	    outdir=${output_velvet}/output_k$id/
-
-	    echo $outdir
+	    dir=${output_velvet}/output_k$id
 
 	    echo "
-${velveth}  $outdir  $id -fasta -shortPaired $velvetInputPaired 
-" >> $script
-
-	done
-
-    fi
-
-
-    for id in `seq 15 2 51` ;
-    do
-
-	dir=${output_velvet}/output_k$id
-
-	echo "
 ${velvetg} $dir  -read_trkg yes -amos_file yes -unused_reads yes -exp_cov auto
 
 " >> $script
 
-    done
+	done
 
 
 
-if [[ ! "$local" == "interactive" ]]; then
-	qsub -cwd  -o cluster/out -e cluster/error -q $local $script
+	if [[ ! "$local" == "interactive" ]]; then
+	    qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
+	fi
+
+
     fi
 
 
@@ -711,10 +1037,10 @@ fi
 if [[ "$step5_q1" == "TRUE" ]]; then
 
     echo -e "11) Extract contigs greater than 150bp for k that has longest contig (top 3)."
-    
-    grep 'Final graph' ${output_velvet}/output_k*/Log | sort  -k 11,11n | tail -3 > ${output_velvet}/longContigs.txt
 
-    awk -F"," '{print $1}'  ${output_velvet}/longContigs.txt | sed -e 's/.*_k/k/g' | sed -e 's/\/.*//g' > ${output_velvet}/kmer_params.txt
+    grep 'Final graph' ${output_velvet}/output_k*/Log | sed -e 's/.*_k//g' | awk '{print "RealMax " $1+$11-1",","velvet/output_k"$0}' | sort  -k 2,2n | tail -3  > ${output_velvet}/longContigs.txt   ########insert real max length (length+k-1) in the log files, sort by it and pick top 3
+
+    awk -F"," '{print $2}'  ${output_velvet}/longContigs.txt | sed -e 's/.*_k/k/g' | sed -e 's/\/.*//g' > ${output_velvet}/kmer_params.txt   #######print kmers values for top3
 
     for k in `cat ${output_velvet}/kmer_params.txt`; do 
 
@@ -733,7 +1059,7 @@ perl $perlExtractContigs  $inputContigs ${output} $k $contigLengthCutoff
     done
 
     if [[ ! "$local" == "interactive" ]]; then
-	qsub -cwd  -o cluster/out -e cluster/error -q $local $script
+	qsub -cwd  -o $cluster_out -e $cluster_error -q $local $script
     fi
 
 	       
@@ -752,7 +1078,7 @@ if [[ "$step6_q14" == "TRUE" ]]; then
 
     for k in `cat ${output_velvet}/kmer_params.txt`; do 
           
-        contigs_input="${output_velvet}/output${k}_contigs_grt140.txt"
+        contigs_input="${output_velvet}/output${k}_contigs_grt150.txt"
         echo "Input files for blastx are in  '$contigs_input'"
 	
 
@@ -780,7 +1106,7 @@ if [[ "$step6_q14" == "TRUE" ]]; then
 		    ((end=start+2))
 		    echo $start $end
 		
-		    blastxContigs=cluster/submission/blastx_${filename}_$start.sh
+		    blastxContigs=${cluster_submission}/blastx_${filename}_$start.sh
 		    echo $blastxContigs
 		
 		    echo "
@@ -793,7 +1119,7 @@ export PERL5LIB=\${PERL5LIB}:${Software}/bioperl-live
 perl $perlBlastxContigs  $i ${output} $k  $start $end  $dbnr
 
 " > $blastxContigs
-		qsub -cwd  -o cluster/out -e cluster/error -q queue14 $blastxContigs
+		qsub -cwd  -o $cluster_out -e $cluster_error -q queue14 $blastxContigs
 		
 		echo "sub script: $blastxContigs"
 		done

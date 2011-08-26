@@ -1,10 +1,10 @@
 
-#!/bin/sh
-#$ -S /bin/sh
+#!/bin/bash
+#$ -S /bin/bash
 
-export PATH=${PATH}:/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/blast-2.2.24/bin
-export PERL5LIB=${PERL5LIB}:/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/bioperl-live
+export PATH=${PATH}:/ugi/data/sofia/Illumeta/exec/blast-2.2.24/bin
+export PERL5LIB=${PERL5LIB}:/ugi/data/sofia/Illumeta/exec/bioperl-live
 
-perl /ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/scripts/blastx_Viralcontigs_nr.pl  results/velvet/outputk15_contigs_grt140.txt results k15  0 2  /ugi/home/shared/sofia/reference_seq/nr/nr.faa
+perl /ugi/data/sofia/Illumeta/scripts/blastx_Viralcontigs_nr.pl  results/velvet/outputk15_contigs_grt140.txt results k15  0 2  /ugi/home/shared/sofia/reference_seq/nr/nr.faa
 
 

@@ -8,12 +8,12 @@ date ##to measure the duration
 
 
 
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/fastqCollapse/fastqCollapse  -i input_files/example.1.fq.gz input_files/example.2.fq.gz -o results/collapsed/example -summary results/collapsed/example_summary.txt
+/ugi/data/sofia/IlluMeta/exec/fastqCollapse/fastqCollapse  -i input_files/example.1.fq.gz input_files/example.2.fq.gz -o results/collapsed/example -summary results/collapsed/example_summary.txt
 
 
 
 
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/SHERAc/concatReads --adaptersFile ../support/adapters.fa results/collapsed/example_1.fq  results/collapsed/example_2.fq  results/merged/example
+/ugi/data/sofia/IlluMeta/exec/SHERAc/concatReads --adaptersFile /ugi/data/sofia/IlluMeta/support/adapters.fa results/collapsed/example_1.fq  results/collapsed/example_2.fq  results/merged/example
 
 
 
@@ -27,12 +27,12 @@ percentage=`awk -F"." '{print $1}' results/percentage_merged.txt`
 
 if [[ $percentage -ge 10 ]]; then
 ############## Hardclipping but no quality calibration
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/novoalign -t180  -H -a  -F STDFQ -f results/merged/example.fq -d /ugi/home/shared/vincent/reference_genome/novoalign/human_g1k_v37.fasta.k15.s2.novoindex > results/novoalign/example_overlapping.novo
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/novoalign  -t250 -H -a  -F STDFQ -f results/merged/example_single_1.fq results/merged/example_single_2.fq -d /ugi/home/shared/vincent/reference_genome/novoalign/human_g1k_v37.fasta.k15.s2.novoindex > results/novoalign/example_nonOverlapping.novo
+/ugi/data/sofia/IlluMeta/exec/novoalign -t180  -H -a  -F STDFQ -f results/merged/example.fq -d /ugi/home/shared/vincent/reference_genome/novoalign/human_g1k_v37.fasta.k15.s2.novoindex > results/novoalign/example_overlapping.novo
+/ugi/data/sofia/IlluMeta/exec/novoalign  -t250 -H -a  -F STDFQ -f results/merged/example_single_1.fq results/merged/example_single_2.fq -d /ugi/home/shared/vincent/reference_genome/novoalign/human_g1k_v37.fasta.k15.s2.novoindex > results/novoalign/example_nonOverlapping.novo
 
 else
 ############# Hardclipping and quality calibration
-/ugi/home/shared/vincent/Projects/Viral_DNA/IlluMeta/exec/novoalign  -t250 -H -a -k -F STDFQ -f results/collapsed/example_1.fq results/collapsed/example_2.fq -d /ugi/home/shared/vincent/reference_genome/novoalign/human_g1k_v37.fasta.k15.s2.novoindex > results/novoalign/example.novo
+/ugi/data/sofia/IlluMeta/exec/novoalign  -t250 -H -a -k -F STDFQ -f results/collapsed/example_1.fq results/collapsed/example_2.fq -d /ugi/home/shared/vincent/reference_genome/novoalign/human_g1k_v37.fasta.k15.s2.novoindex > results/novoalign/example.novo
 
 fi
 
